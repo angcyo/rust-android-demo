@@ -1,0 +1,159 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'com.angcyo.rust_android_demo'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.angcyo.rust_android_demo"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    packagingOptions {
+        pickFirst 'lib/armeabi-v7a/librust.so'
+        pickFirst 'lib/arm64-v8a/librust.so'
+    }
+}
+
+dependencies {
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.material
+    implementation libs.androidx.activity
+    implementation libs.androidx.constraintlayout
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}
+
+//--rust-android-gradle
+// https://github.com/mozilla/rust-android-gradle
+
+apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
+
+// https://github.com/mozilla/rust-android-gradle#configuration 配置项
+cargo {
+    module = "../rust"       // Or whatever directory contains your Cargo.toml
+    libname = "rust"          // Or whatever matches Cargo.toml's [package] name.
+    targets = ["arm", "arm64"]  // See bellow for a longer list of options
+    profile = "release"
+    //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#verbose
+    verbose = true
+    //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#specifying-paths-to-sub-commands-python-cargo-and-rustc
+    rustcCommand = "/Users/angcyo/.cargo/bin/rustc"
+    cargoCommand = "/Users/angcyo/.cargo/bin/cargo"
+    pythonCommand = "/usr/bin/python3"
+    //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#targetdirectory
+    // Note: path is either absolute, or relative to the gradle project's `projectDir`.
+    //targetDirectory = 'src/main/jniLibs'
+    //targetDirectory = '/Users/angcyo/project/android/rust-android-demo/app/src/main/jniLibs'
+}
+
+// whenTaskAdded -> configureEach
+tasks.configureEach { task ->
+    //println task.name
+    if (task.name == 'mergeDebugJniLibFolders' || task.name == 'mergeReleaseJniLibFolders') {
+        task.dependsOn 'cargoBuild'
+    } else if ((task.name == 'javaPreCompileDebug' || task.name == 'javaPreCompileRelease')) {
+        task.dependsOn 'cargoBuild'
+    }
+}
+
+/*afterEvaluate {
+    // The `cargoBuild` task isn't available until after evaluation.
+    android.applicationVariants.all { variant ->
+        def productFlavor = ""
+        variant.productFlavors.each {
+            productFlavor += "${it.name.capitalize()}"
+        }
+        def buildType = "${variant.buildType.name.capitalize()}"
+        tasks["generate${productFlavor}${buildType}Assets"].dependsOn(tasks["cargoBuild"])
+    }
+}*/
+
+/*
+for (target in cargo.targets) {
+    tasks.register("copy_so_${target.capitalize()}", Copy) {
+
+        def (abi, archTriple) = [
+                arm   : ['armeabi-v7a', 'armv7-linux-androideabi'],
+                arm64 : ['arm64-v8a', 'aarch64-linux-android'],
+                x86   : ['x86', 'i686-linux-android'],
+                x86_64: ['x86_64', 'x86_64-linux-android'],
+        ][target]
+
+        def from_path = "${cargo.module}/target/$archTriple/release/lib${cargo.libname}.so"
+        def into_path = "${projectDir}/src/main/jniLibs/$abi"
+
+        assert file(from_path).exists()
+
+        from from_path
+        into into_path
+    }
+}
+*/
+
+/// 直接debug运行时, 可能不会将so打包进apk, 这里复制一下
+/// 打包的时候, 需要删除对应的so文件
+task cargoCopyDebug(group: 'rust', description: '构建对应的so, 并且复制到工程jniLibs目录下', dependsOn: 'cargoBuild') {
+    doLast {
+        for (target in cargo.targets) {
+            def (abi, archTriple) = [
+                    arm   : ['armeabi-v7a', 'armv7-linux-androideabi'],
+                    arm64 : ['arm64-v8a', 'aarch64-linux-android'],
+                    x86   : ['x86', 'i686-linux-android'],
+                    x86_64: ['x86_64', 'x86_64-linux-android'],
+            ][target]
+
+            def from_path = "${cargo.module}/target/$archTriple/release/lib${cargo.libname}.so"
+            def into_path = "${projectDir}/src/main/jniLibs/$abi"
+            println from_path;
+            assert file(from_path).exists()
+            copy {
+                from from_path
+                into into_path
+            }
+        }
+    }
+}
+
+/// 打包的时候, 需要删除对应的so文件
+task cargoCopyDelete(group: 'rust', description: '删除构建对应的so') {
+    doLast {
+        for (target in cargo.targets) {
+            def (abi, archTriple) = [
+                    arm   : ['armeabi-v7a', 'armv7-linux-androideabi'],
+                    arm64 : ['arm64-v8a', 'aarch64-linux-android'],
+                    x86   : ['x86', 'i686-linux-android'],
+                    x86_64: ['x86_64', 'x86_64-linux-android'],
+            ][target]
+
+            def into_path = "${projectDir}/src/main/jniLibs/$abi/lib${cargo.libname}.so"
+            delete into_path
+        }
+    }
+}
