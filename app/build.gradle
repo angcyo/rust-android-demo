@@ -64,12 +64,12 @@ cargo {
     //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#verbose
     verbose = true
 
+    //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#specifying-paths-to-sub-commands-python-cargo-and-rustc
     if (System.getProperty("os.name").toLowerCase().contains("windows")) {
         rustcCommand
         cargoCommand
         pythonCommand
     } else {
-        //--https://github.com/ncalexan/rust-android-gradle/blob/master/README.md#specifying-paths-to-sub-commands-python-cargo-and-rustc
         rustcCommand = "/Users/angcyo/.cargo/bin/rustc"
         cargoCommand = "/Users/angcyo/.cargo/bin/cargo"
         pythonCommand = "/usr/bin/python3"
